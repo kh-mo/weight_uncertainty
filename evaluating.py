@@ -35,14 +35,15 @@ def test_ensemble(model, args):
 if __name__ == "__main__":
     # hyper parameter
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--sigma_1", type=int, default=0)
     parser.add_argument("--sigma_2", type=int, default=-6)
     parser.add_argument("--pi", type=int, default=0.5)
     parser.add_argument("--samples", type=int, default=2)
     parser.add_argument("--test_sample", type=int, default=10)
     parser.add_argument("--classes", type=int, default=10)
-    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--lr", type=int, default=0.0001)
     args = parser.parse_args()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -53,5 +54,15 @@ if __name__ == "__main__":
     TEST_SIZE = len(test_loader.dataset)
 
     model = BayesianNetwork(args).to(args.device)
-    model.load_state_dict(torch.load(os.path.join(os.getcwd(), "saved_model/w_u")))
+    # model.load_state_dict(torch.load(os.path.join(os.getcwd(), "saved_model/w_u")))
+
+    model.load_state_dict(torch.load(os.path.join(os.getcwd(), "saved_model/weight_uncertainty_model" +
+                                                # "_epoch" + str(args.epoch) +
+                                                "_epoch" + str(20) +
+                                                "_batch_size" + str(args.batch_size) +
+                                                "_lr" + str(args.lr) +
+                                                "_sigma1" + str(args.sigma_1) +
+                                                "_sigma2" + str(args.sigma_2) +
+                                                "_pi" + str(args.pi))))
+
     test_ensemble(model, args)

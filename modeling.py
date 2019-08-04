@@ -35,9 +35,10 @@ class Gaussian(object):
 class ScaleMixtureGaussian(object):
     def __init__(self, pi, sigma1, sigma2, args):
         super(ScaleMixtureGaussian, self).__init__()
+        self.args = args
         self.pi = pi
-        self.sigma1 = torch.FloatTensor([math.exp(sigma1)]).to(args.device)
-        self.sigma2 = torch.FloatTensor([math.exp(sigma2)]).to(args.device)
+        self.sigma1 = torch.FloatTensor([math.exp(sigma1)]).to(self.args.device)
+        self.sigma2 = torch.FloatTensor([math.exp(sigma2)]).to(self.args.device)
         self.gaussian1 = torch.distributions.normal.Normal(0, self.sigma1)
         self.gaussian2 = torch.distributions.normal.Normal(0, self.sigma2)
 
@@ -53,16 +54,16 @@ class BayesianLinear(nn.Module):
         self.in_dim = in_dim
         self.out_dim = out_dim
         # weight parameters
-        self.weight_mu = nn.Parameter(torch.Tensor(self.out_dim, self.in_dim).uniform_(-0.1, 0.1))
-        self.weight_rho = nn.Parameter(torch.Tensor(self.out_dim, self.in_dim).uniform_(-0.1, 0.1))
-        self.weight = Gaussian(self.weight_mu, self.weight_rho, args)
+        self.weight_mu = nn.Parameter(torch.Tensor(self.out_dim, self.in_dim).uniform_(-0.2, 0.2))
+        self.weight_rho = nn.Parameter(torch.Tensor(self.out_dim, self.in_dim).uniform_(-5, -4))
+        self.weight = Gaussian(self.weight_mu, self.weight_rho, self.args)
         # bias parameters
-        self.bias_mu = nn.Parameter(torch.Tensor(self.out_dim).uniform_(-0.1, 0.1))
-        self.bias_rho = nn.Parameter(torch.Tensor(self.out_dim).uniform_(-0.1, 0.1))
-        self.bias = Gaussian(self.bias_mu, self.bias_rho, args)
+        self.bias_mu = nn.Parameter(torch.Tensor(self.out_dim).uniform_(-0.2, 0.2))
+        self.bias_rho = nn.Parameter(torch.Tensor(self.out_dim).uniform_(-5, -4))
+        self.bias = Gaussian(self.bias_mu, self.bias_rho, self.args)
         # prior distributions
-        self.weight_prior = ScaleMixtureGaussian(args.pi, args.sigma_1, args.sigma_2, args)
-        self.bias_prior = ScaleMixtureGaussian(args.pi, args.sigma_1, args.sigma_2, args)
+        self.weight_prior = ScaleMixtureGaussian(self.args.pi, self.args.sigma_1, self.args.sigma_2, self.args)
+        self.bias_prior = ScaleMixtureGaussian(self.args.pi, self.args.sigma_1, self.args.sigma_2, self.args)
         self.log_prior = 0
         self.log_variational_posterior = 0
 
@@ -101,10 +102,10 @@ class BayesianNetwork(nn.Module):
         return self.linear1.log_variational_posterior + self.linear2.log_variational_posterior + self.linear3.log_variational_posterior
 
     def sample_elbo(self, data, target):
-        outputs = torch.zeros(args.samples, data.shape[0], args.classes).to(self.args.device)
-        log_priors = torch.zeros(args.samples).to(self.args.device)
-        log_variational_posteriors = torch.zeros(args.samples).to(self.args.device)
-        for i in range(args.samples):
+        outputs = torch.zeros(self.args.samples, data.shape[0], self.args.classes).to(self.args.device)
+        log_priors = torch.zeros(self.args.samples).to(self.args.device)
+        log_variational_posteriors = torch.zeros(self.args.samples).to(self.args.device)
+        for i in range(self.args.samples):
             outputs[i] = self.forward(data)
             log_priors[i] = self.log_prior()
             log_variational_posteriors[i] = self.log_variational_posterior()
@@ -125,17 +126,26 @@ def train(model, optimizer, epoch, args):
         loss.backward()
         optimizer.step()
     print("epoch : {}, loss : {}".format(epoch, sum(loss_list)/len(loss_list)))
+    if epoch % 50 == 0:
+        torch.save(model.state_dict(), os.path.join(os.getcwd(), "saved_model/weight_uncertainty_model" +
+                                                        "_epoch" + str(epoch+1) +
+                                                        "_batch_size" + str(args.batch_size) +
+                                                        "_lr" + str(args.lr) +
+                                                        "_sigma1" + str(args.sigma_1) +
+                                                        "_sigma2" + str(args.sigma_2) +
+                                                        "_pi" + str(args.pi)))
 
 if __name__ == "__main__":
     # hyper parameter
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--sigma_1", type=int, default=0)
     parser.add_argument("--sigma_2", type=int, default=-6)
     parser.add_argument("--pi", type=int, default=0.5)
     parser.add_argument("--samples", type=int, default=2)
     parser.add_argument("--classes", type=int, default=10)
-    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--lr", type=int, default=0.0001)
     args = parser.parse_args()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -153,7 +163,7 @@ if __name__ == "__main__":
 
     # modeling
     model = BayesianNetwork(args).to(args.device)
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # training
     for epoch in range(args.epochs):
@@ -164,5 +174,10 @@ if __name__ == "__main__":
         os.makedirs("saved_model")
     except FileExistsError as e:
         pass
-    torch.save(model.state_dict(), os.path.join(os.getcwd(), "saved_model/w_u"))
-
+    torch.save(model.state_dict(), os.path.join(os.getcwd(), "saved_model/weight_uncertainty_model" +
+                                                "_epoch" + str(args.epochs) +
+                                                "_batch_size" + str(args.batch_size) +
+                                                "_lr" + str(args.lr) +
+                                                "_sigma1" + str(args.sigma_1) +
+                                                "_sigma2" + str(args.sigma_2) +
+                                                "_pi" + str(args.pi)))
