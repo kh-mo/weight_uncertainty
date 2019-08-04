@@ -7,8 +7,15 @@ This repository is implemented by Pytorch.
 
 ## Getting Start
 ### modeling 
-- Input : 
-- Output : 
+- Input : mnist image file
+- Output : saved file
 ```shell
 python modeling.py 
+```
+
+### evaluating 
+- Input : mnist test file, saved model file
+- Output : score
+```shell
+python evaluating.py 
 ```
